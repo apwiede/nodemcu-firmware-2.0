@@ -41,7 +41,6 @@
 #include "osapi.h"
 #include "c_types.h"
 #include "mem.h"
-#include "flash_fs.h"
 
 #include "lwip/err.h"
 #include "lwip/ip_addr.h"

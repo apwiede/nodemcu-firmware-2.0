@@ -41,7 +41,6 @@
 #include "osapi.h"
 #include "c_types.h"
 #include "mem.h"
-#include "flash_fs.h"
 
 #include "c_string.h"
 #include "c_stdio.h"
@@ -82,6 +81,16 @@ debugCh2Id_t debugCh2Id[] = {
  { 'Y', DEBUG_COMP_MSG_ALWAYS},
  { '\0', 0},
 };
+
+#include <lwip/app/time.h>
+int _gettimeofday_r (struct timeval *tp, void *tz) {
+  if (tz)
+    return -1;
+  tp->tv_usec = 0;
+  if (time (&tp->tv_sec) == (time_t) -1)
+    return -1;
+  return 0;
+}
 
 // ================================= getDebugFlags ====================================
 

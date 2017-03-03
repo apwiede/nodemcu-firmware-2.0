@@ -41,7 +41,6 @@
 #include "osapi.h"
 #include "c_types.h"
 #include "mem.h"
-#include "flash_fs.h"
 
 #include "c_string.h"
 #include "c_stdlib.h"

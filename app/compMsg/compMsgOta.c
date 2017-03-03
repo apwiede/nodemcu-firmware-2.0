@@ -53,8 +53,6 @@
 #include "osapi.h"
 #include "c_types.h"
 #include "mem.h"
-#include "flash_fs.h"
-//#include "../rboot/rboot-ota.h"
 
 #include "c_string.h"
 #include "c_stdio.h"

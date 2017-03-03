@@ -41,7 +41,7 @@
 #include "osapi.h"
 #include "c_types.h"
 #include "mem.h"
-#include "flash_fs.h"
+#include "vfs.h"
 
 #include "c_string.h"
 #include "c_stdio.h"
@@ -70,14 +70,14 @@ static flag2Str_t flag2Strs [] = {
 
 
 static int compMsgMsgDescId = 0;
-static volatile int fileFd = FS_OPEN_OK - 1;
+static volatile int fileFd = 0;
 
 // ================================= openFile ====================================
 
 static uint8_t openFile(compMsgMsgDesc_t *self, const uint8_t *fileName, const uint8_t *fileMode) {
   self->fileName = fileName;
-  fileFd = fs_open(fileName, fs_mode2flag(fileMode));
-  if (fileFd < FS_OPEN_OK) {
+  fileFd = vfs_open(fileName, fileMode);
+  if (fileFd != 0) {
     return COMP_MSG_ERR_OPEN_FILE;
   }
   return COMP_MSG_ERR_OK;
@@ -86,10 +86,10 @@ static uint8_t openFile(compMsgMsgDesc_t *self, const uint8_t *fileName, const u
 // ================================= closeFile ====================================
 
 static uint8_t closeFile(compMsgMsgDesc_t *self) {
-  if (fileFd != (FS_OPEN_OK - 1)){
+  if (fileFd != 0){
     self->fileName = NULL;
-    fs_close(fileFd);
-    fileFd = FS_OPEN_OK - 1;
+    vfs_close(fileFd);
+    fileFd = 0;
   }
   return COMP_MSG_ERR_OK;
 }
@@ -97,10 +97,10 @@ static uint8_t closeFile(compMsgMsgDesc_t *self) {
 // ================================= flushFile ====================================
 
 static uint8_t flushFile(compMsgMsgDesc_t *self) {
-  if (fileFd == (FS_OPEN_OK - 1)) {
+  if (fileFd == 0) {
     return COMP_MSG_ERR_FILE_NOT_OPENED;
   }
-  if (fs_flush(fileFd) == 0) {
+  if (vfs_flush(fileFd) == 0) {
     return COMP_MSG_ERR_OK;
   }
   return COMP_MSG_ERR_FLUSH_FILE;
@@ -115,10 +115,10 @@ static uint8_t readLine(compMsgMsgDesc_t *self, uint8_t **buffer, uint8_t *lgth)
   uint8_t *cp;
   uint8_t end_char = '\n';
 
-  if (fileFd == (FS_OPEN_OK - 1)) {
+  if (fileFd == 0) {
     return COMP_MSG_ERR_FILE_NOT_OPENED;
   }
-  n = fs_read(fileFd, buf, n);
+  n = vfs_read(fileFd, buf, n);
   cp = *buffer;
   *lgth = 0;
   for (i = 0; i < n; ++i) {
@@ -130,7 +130,7 @@ static uint8_t readLine(compMsgMsgDesc_t *self, uint8_t **buffer, uint8_t *lgth)
   }
   cp[i] = 0;
   *lgth = i;
-  fs_seek (fileFd, -(n - i), SEEK_CUR);
+  vfs_lseek (fileFd, -(n - i), SEEK_CUR);
   return COMP_MSG_ERR_OK;
 }
 
@@ -139,10 +139,10 @@ static uint8_t readLine(compMsgMsgDesc_t *self, uint8_t **buffer, uint8_t *lgth)
 static uint8_t writeLine(compMsgMsgDesc_t *self, const uint8_t *buffer, uint8_t lgth) {
   int result;
 
-  if (fileFd == (FS_OPEN_OK - 1)) {
+  if (fileFd == 0) {
     return COMP_MSG_ERR_FILE_NOT_OPENED;
   }
-  result = fs_write(fileFd, buffer, lgth);
+  result = vfs_write(fileFd, buffer, lgth);
   if (result == lgth) {
     return COMP_MSG_ERR_OK;
   }

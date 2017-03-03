@@ -41,11 +41,10 @@
 #include "osapi.h"
 #include "c_types.h"
 #include "mem.h"
-#include "flash_fs.h"
 
+#include "lwip/ip_addr.h"
 #include "lwip/err.h"
 #include "lwip/app/espconn.h"
-#include "lwip/ip_addr.h"
 #include "lwip/dns.h"
 
 #include "c_string.h"
