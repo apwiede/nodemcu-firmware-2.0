@@ -20,7 +20,7 @@ SDK_FILE_SHA1:=b0127a99b45b3778be4a752387ab8dc0f6dd7810
 TOP_DIR:=$(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 SDK_DIR:=$(TOP_DIR)/sdk/esp_iot_sdk_v$(SDK_VER)
 CCFLAGS:= -I$(TOP_DIR)/sdk-overrides/include -I$(SDK_DIR)/include
-LDFLAGS:= -L$(SDK_DIR)/lib -L$(SDK_DIR)/ld $(LDFLAGS)
+LDFLAGS:= -L$(TOP_DIR)/sdk-overrides/lib -L$(SDK_DIR)/lib -L$(SDK_DIR)/ld $(LDFLAGS)
 
 ifdef DEBUG
   CCFLAGS += -ggdb -O0
@@ -296,7 +296,6 @@ else
 endif
 
 .subdirs:
-	echo "SUB: $(SUBDIRS)!"
 	$(Q) set -e; $(foreach d, $(SUBDIRS), $(MAKE) $(MAKEPDIR) -C $(d);)
 
 bin/rboot.bin: rboot/firmware/rboot.bin
