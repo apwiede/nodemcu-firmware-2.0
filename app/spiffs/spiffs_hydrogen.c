@@ -16,6 +16,11 @@
 #define SPIFFS_FH_UNOFFS(fs, fh) (fh)
 #endif
 
+#if SPIFFS_ENCRYPT
+static char crypt_key[CRYPT_KEY_MAX_LEN + 1];
+static const uint8_t iv[]  = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f };
+#endif
+
 #if SPIFFS_CACHE == 1
 static s32_t spiffs_fflush_cache(spiffs *fs, spiffs_file fh);
 #endif
@@ -363,6 +368,11 @@ s32_t SPIFFS_read(spiffs *fs, spiffs_file fh, void *buf, s32_t len) {
 
   spiffs_fd *fd;
   s32_t res;
+#if defined(SPIFFS_USE_ENCRYPT)
+    s32_t padded_len = len + (16 - 1) & ~(16 - 1);
+    uint8_t buf1[padded_len];
+    uint8_t buf2[padded_len];
+#endif
 
   fh = SPIFFS_FH_UNOFFS(fs, fh);
   res = spiffs_fd_get(fs, fh, &fd);
@@ -403,6 +413,15 @@ s32_t SPIFFS_read(spiffs *fs, spiffs_file fh, void *buf, s32_t len) {
     res = spiffs_object_read(fd, fd->fdoffset, len, (u8_t*)buf);
     SPIFFS_API_CHECK_RES_UNLOCK(fs, res);
   }
+#if defined(SPIFFS_USE_ENCRYPT)
+  if ((fd->flags & SPIFFS_O_ENCRYPT) && (strlen(crypt_key) > 0)) {
+    memset(buf1, 0, padded_len);
+    memcpy(buf1, buf, len);
+    memset(buf2, 0, padded_len);
+    AES128_CBC_decrypt_buffer(buf2, buf1, len, crypt_key, iv);
+    memcpy(buf, buf2, len);
+  }
+#endif
   fd->fdoffset += len;
 
   SPIFFS_UNLOCK(fs);
@@ -446,6 +465,13 @@ s32_t SPIFFS_write(spiffs *fs, spiffs_file fh, void *buf, s32_t len) {
   spiffs_fd *fd;
   s32_t res;
   u32_t offset;
+#if defined(SPIFFS_USE_ENCRYPT)
+  s32_t padded_len;
+  // pad len to a multiple of 16 bytes (see comment in aes.c)
+  padded_len = len + (16 - 1) & ~(16 - 1);
+  uint8_t buf1[padded_len];
+  uint8_t buf2[padded_len];
+#endif
 
   fh = SPIFFS_FH_UNOFFS(fs, fh);
   res = spiffs_fd_get(fs, fh, &fd);
@@ -462,6 +488,15 @@ s32_t SPIFFS_write(spiffs *fs, spiffs_file fh, void *buf, s32_t len) {
 
   offset = fd->fdoffset;
 
+#if defined(SPIFFS_USE_ENCRYPT)
+  if ((fd->flags & SPIFFS_O_ENCRYPT)  && (strlen(crypt_key) > 0)) {
+    memset(buf1, 0, padded_len);
+    memcpy(buf1, buf, len);
+    len = padded_len;
+    AES128_CBC_encrypt_buffer(buf2, buf1, len, crypt_key, iv);
+    buf = buf2;
+  }
+#endif
 #if SPIFFS_CACHE_WR
   if (fd->cache_page == 0) {
     // see if object id is associated with cache already
@@ -1102,6 +1137,19 @@ s32_t SPIFFS_set_file_callback_func(spiffs *fs, spiffs_file_callback cb_func) {
   SPIFFS_UNLOCK(fs);
   return 0;
 }
+
+#if defined(SPIFFS_USE_ENCRYPT)
+bool SPIFFS_set_encrypt(const char *key) {
+  if (strlen(key) > CRYPT_KEY_MAX_LEN) {
+    return FALSE;
+  }
+  memset(crypt_key, 0, CRYPT_KEY_MAX_LEN);
+  if (strlen(key) > 0) {
+    memcpy(crypt_key, key, strlen(key));
+  }
+  return TRUE;
+}
+#endif
 
 #if SPIFFS_TEST_VISUALISATION
 s32_t SPIFFS_vis(spiffs *fs) {

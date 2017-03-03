@@ -617,6 +617,12 @@ static void myspiffs_vfs_clearerr( void ) {
   SPIFFS_clearerr( &fs );
 }
 
+#if defined(SPIFFS_USE_ENCRYPT)
+bool myspiffs_set_encrypt(const char *key) {
+  return SPIFFS_set_encrypt(key);
+}
+#endif
+
 
 // ---------------------------------------------------------------------------
 // VFS interface functions

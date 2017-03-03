@@ -17,4 +17,7 @@ int myspiffs_check( void );
 int myspiffs_rename( const char *old, const char *newname );
 size_t myspiffs_size( int fd );
 int myspiffs_format (void);
+#if defined(SPIFFS_USE_ENCRYPT)
+bool myspiffs_set_encrypt(const char *key);
+#endif
 

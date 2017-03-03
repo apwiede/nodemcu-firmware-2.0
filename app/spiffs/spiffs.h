@@ -169,6 +169,11 @@ typedef void (*spiffs_file_callback)(struct spiffs_t *fs, spiffs_fileop_type op,
 /* If SPIFFS_O_CREAT and SPIFFS_O_EXCL are set, SPIFFS_open() shall fail if the file exists */
 #define SPIFFS_EXCL                     (1<<6)
 #define SPIFFS_O_EXCL                   SPIFFS_EXCL
+#if defined(SPIFFS_USE_ENCRYPT)
+/* If SPIFFS_ENCRYPT is set, SPIFFS_set_encrypt() has to be called in advance */
+#define SPIFFS_ENCRYPT                  (1<<7)
+#define SPIFFS_O_ENCRYPT                SPIFFS_ENCRYPT
+#endif
 
 #define SPIFFS_SEEK_SET                 (0)
 #define SPIFFS_SEEK_CUR                 (1)
@@ -657,6 +662,17 @@ s32_t SPIFFS_tell(spiffs *fs, spiffs_file fh);
  * @param cb_func       the callback on file operations
  */
 s32_t SPIFFS_set_file_callback_func(spiffs *fs, spiffs_file_callback cb_func);
+
+#if defined(SPIFFS_USE_ENCRYPT)
+#define CRYPT_KEY_MAX_LEN 16
+/**
+ * Registers a key for encryption of file contents
+ * The encryption is done, if the flags for open contains SPIFFS_ENCRYPT
+ *
+ * @param key           the key for encryption
+ */
+bool SPIFFS_set_encrypt(const char *key);
+#endif
 
 #if SPIFFS_TEST_VISUALISATION
 /**
