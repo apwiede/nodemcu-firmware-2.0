@@ -1,0 +1,5 @@
+./simulateMcu.tcl 2>&1 | tee dbg.txt | m
+vi dbg.txt
+grep "==" dbg.txt | sed -e 's/^.* os_/os_/' > dbg3.txt
+./chkAlloc.tcl < dbg3.txt 2>&1 | m
+
