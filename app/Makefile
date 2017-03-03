@@ -20,6 +20,8 @@ FLAVOR = debug
 ifndef PDIR # {
 GEN_IMAGES= eagle.app.v6.out eagle.app.v6.0.out
 GEN_BINS= eagle.app.v6.bin eagle.app.v6.0.bin
+#GEN_IMAGES= eagle.app.v6.0.out
+#GEN_BINS= eagle.app.v6.0.bin
 SPECIAL_MKTARGETS=$(APP_MKTARGETS)
 SUBDIRS= 					\
 	user 					\
@@ -46,6 +48,7 @@ SUBDIRS= 					\
 	http					\
 	rboot					\
 	compMsg					\
+	gdbstub					\
 	fatfs					\
 	esp-gdbstub				\
 	websocket
@@ -72,6 +75,7 @@ ifeq ($(FLAVOR),release)
 endif
 
 LD_FILE = $(LDDIR)/nodemcu.ld
+LD_FILE0 = $(LDDIR)/nodemcu0.ld
 
 COMPONENTS_eagle.app.v6 = 			\
 	user/libuser.a 				\
@@ -98,7 +102,7 @@ COMPONENTS_eagle.app.v6 = 			\
 	esp-gdbstub/libgdbstub.a		\
 	net/libnodemcu_net.a			\
 	rboot/rboot.a                           \
-	compmsg/compmsg.a                       \
+	compMsg/compmsg.a                       \
 	mbedtls/libmbedtls.a                    \
 	modules/libmodules.a			\
 
@@ -129,7 +133,7 @@ COMPONENTS_eagle.app.v6.0 = 			\
 	esp-gdbstub/libgdbstub.a		\
 	net/libnodemcu_net.a			\
 	rboot/rboot.a                           \
-	compmsg/compmsg.a                       \
+	compMsg/compmsg.a                       \
 	mbedtls/libmbedtls.a                    \
 	modules/libmodules.a			\
 
