@@ -3,6 +3,7 @@ cache/
 user_config.h
 server-ca.crt
 sdk-overrides/lib
+myConfig.txt
 
 #ignore Eclipse project files
 .cproject
