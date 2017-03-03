@@ -106,7 +106,7 @@ ESPTOOL2 ?= ../tools/esptool2/esptool2
 RBOOT_E2_SECTS     ?= .text .data .rodata
 RBOOT_E2_USER_ARGS ?= -quiet -bin -boot2 -iromchksum
 
-#V := 1
+V := 1
 V ?= $(VERBOSE)
 ifeq ("$(V)","1")
 Q :=
@@ -296,6 +296,7 @@ else
 endif
 
 .subdirs:
+	echo "SUB: $(SUBDIRS)!"
 	$(Q) set -e; $(foreach d, $(SUBDIRS), $(MAKE) $(MAKEPDIR) -C $(d);)
 
 bin/rboot.bin: rboot/firmware/rboot.bin

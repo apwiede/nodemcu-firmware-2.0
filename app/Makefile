@@ -18,8 +18,8 @@ FLAVOR = debug
 #EXTRA_CCFLAGS += -u
 
 ifndef PDIR # {
-GEN_IMAGES= eagle.app.v6.out
-GEN_BINS= eagle.app.v6.bin
+GEN_IMAGES= eagle.app.v6.out eagle.app.v6.0.out
+GEN_BINS= eagle.app.v6.bin eagle.app.v6.0.bin
 SPECIAL_MKTARGETS=$(APP_MKTARGETS)
 SUBDIRS= 					\
 	user 					\
@@ -44,6 +44,8 @@ SUBDIRS= 					\
 	tsl2561					\
 	net					\
 	http					\
+	rboot					\
+	compMsg					\
 	fatfs					\
 	esp-gdbstub				\
 	websocket
@@ -95,8 +97,43 @@ COMPONENTS_eagle.app.v6 = 			\
 	websocket/libwebsocket.a		\
 	esp-gdbstub/libgdbstub.a		\
 	net/libnodemcu_net.a			\
-	mbedtls/libmbedtls.a      \
+	rboot/rboot.a                           \
+	compmsg/compmsg.a                       \
+	mbedtls/libmbedtls.a                    \
 	modules/libmodules.a			\
+
+COMPONENTS_eagle.app.v6 += gdbstub/libgdbstub.a
+
+COMPONENTS_eagle.app.v6.0 = 			\
+	user/libuser.a 				\
+	driver/libdriver.a 			\
+	pcm/pcm.a				\
+	platform/libplatform.a 			\
+	task/libtask.a 				\
+	libc/liblibc.a 				\
+	lua/liblua.a 				\
+	lwip/liblwip.a 				\
+	coap/coap.a 				\
+	mqtt/mqtt.a 				\
+	u8glib/u8glib.a 			\
+	ucglib/ucglib.a 			\
+	smart/smart.a 				\
+	spiffs/spiffs.a 			\
+	fatfs/libfatfs.a			\
+	cjson/libcjson.a 			\
+	crypto/libcrypto.a 			\
+	dhtlib/libdhtlib.a 			\
+	tsl2561/tsl2561lib.a			\
+	http/libhttp.a				\
+	websocket/libwebsocket.a		\
+	esp-gdbstub/libgdbstub.a		\
+	net/libnodemcu_net.a			\
+	rboot/rboot.a                           \
+	compmsg/compmsg.a                       \
+	mbedtls/libmbedtls.a                    \
+	modules/libmodules.a			\
+
+COMPONENTS_eagle.app.v6.0 += gdbstub/libgdbstub.a
 
 # Inspect the modules library and work out which modules need to be linked.
 # For each enabled module, a symbol name of the form XYZ_module_selected is
@@ -108,6 +145,7 @@ LINKFLAGS_eagle.app.v6 = 			\
 	-Wl,--gc-sections 			\
 	-Wl,-Map=mapfile 			\
 	-nostdlib 				\
+        -u Cache_Read_Enable_New \
 	-T$(LD_FILE) 				\
 	-Wl,@../ld/defsym.rom			\
 	-Wl,--no-check-sections 		\
@@ -115,7 +153,6 @@ LINKFLAGS_eagle.app.v6 = 			\
 	-Wl,-static 				\
 	$(addprefix -u , $(SELECTED_MODULE_SYMS)) \
 	-Wl,--start-group 			\
-	-lmain 					\
 	-lc 					\
 	-lgcc 					\
 	-lhal 					\
@@ -124,15 +161,50 @@ LINKFLAGS_eagle.app.v6 = 			\
 	-lnet80211 				\
 	-lwpa 					\
 	-lwpa2					\
+	-lmain 					\
 	-lsmartconfig 				\
 	-lcrypto				\
+	-lssl 					\
 	-lwps					\
 	$(DEP_LIBS_eagle.app.v6) 		\
 	-Wl,--end-group 			\
 	-lm
 
+LINKFLAGS_eagle.app.v6.0 = 			\
+	-Wl,--gc-sections 			\
+	-Wl,-Map=mapfile 			\
+	-nostdlib 				\
+        -u Cache_Read_Enable_New \
+	-T$(LD_FILE0) 				\
+	-Wl,@../ld/defsym.rom			\
+	-Wl,--no-check-sections 		\
+	-Wl,--wrap=_xtos_set_exception_handler	\
+	-Wl,-static 				\
+	$(addprefix -u , $(SELECTED_MODULE_SYMS)) \
+	-Wl,--start-group 			\
+	$(DEP_LIBS_eagle.app.v6.0) 		\
+	-lc 					\
+	-lgcc 					\
+	-lhal 					\
+	-lphy 					\
+	-lpp 					\
+	-lnet80211 				\
+	-lwpa 					\
+	-lwpa2					\
+	-lmain2 				\
+	-lsmartconfig 				\
+	-lssl 					\
+	-lcrypto				\
+	-lwps					\
+	-Wl,--end-group 			\
+	-lm
+
 DEPENDS_eagle.app.v6 = 				\
                 $(LD_FILE) 			\
+		Makefile
+
+DEPENDS_eagle.app.v6.0 = 			\
+                $(LD_FILE0) 			\
 		Makefile
 
 #############################################################
