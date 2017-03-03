@@ -102,6 +102,23 @@ endif
 #############################################################
 ESPTOOL ?= ../tools/esptool.py
 
+ESPTOOL2 ?= ../tools/esptool2/esptool2
+RBOOT_E2_SECTS     ?= .text .data .rodata
+RBOOT_E2_USER_ARGS ?= -quiet -bin -boot2 -iromchksum
+
+#V := 1
+V ?= $(VERBOSE)
+ifeq ("$(V)","1")
+Q :=
+QECHO := @true
+VECHO := @echo
+MAKEPDIR :=
+else
+Q := @
+QECHO := @echo
+VECHO := @true
+MAKEPDIR := --no-print-directory
+endif
 
 CSRCS ?= $(wildcard *.c)
 ASRCs ?= $(wildcard *.s)
@@ -171,20 +188,30 @@ define MakeLibrary
 DEP_LIBS_$(1) = $$(foreach lib,$$(filter %.a,$$(COMPONENTS_$(1))),$$(dir $$(lib))$$(LIBODIR)/$$(notdir $$(lib)))
 DEP_OBJS_$(1) = $$(foreach obj,$$(filter %.o,$$(COMPONENTS_$(1))),$$(dir $$(obj))$$(OBJODIR)/$$(notdir $$(obj)))
 $$(LIBODIR)/$(1).a: $$(OBJS) $$(DEP_OBJS_$(1)) $$(DEP_LIBS_$(1)) $$(DEPENDS_$(1))
-	@mkdir -p $$(LIBODIR)
-	$$(if $$(filter %.a,$$?),mkdir -p $$(EXTRACT_DIR)_$(1))
-	$$(if $$(filter %.a,$$?),cd $$(EXTRACT_DIR)_$(1); $$(foreach lib,$$(filter %.a,$$?),$$(AR) xo $$(UP_EXTRACT_DIR)/$$(lib);))
-	$$(AR) ru $$@ $$(filter %.o,$$?) $$(if $$(filter %.a,$$?),$$(EXTRACT_DIR)_$(1)/*.o)
-	$$(if $$(filter %.a,$$?),$$(RM) -r $$(EXTRACT_DIR)_$(1))
+	$(Q) mkdir -p $$(LIBODIR)
+	$(Q) $$(if $$(filter %.a,$$?),mkdir -p $$(EXTRACT_DIR)_$(1))
+	$(Q) $$(if $$(filter %.a,$$?),cd $$(EXTRACT_DIR)_$(1); $$(foreach lib,$$(filter %.a,$$?),$$(AR) xo $$(UP_EXTRACT_DIR)/$$(lib);))
+	$(QECHO) AR $$@
+	$(Q) $$(AR) ru $$@ $$(filter %.o,$$?) $$(if $$(filter %.a,$$?),$$(EXTRACT_DIR)_$(1)/*.o)
+	$(Q) $$(if $$(filter %.a,$$?),$$(RM) -r $$(EXTRACT_DIR)_$(1))
 endef
 
 define MakeImage
 DEP_LIBS_$(1) = $$(foreach lib,$$(filter %.a,$$(COMPONENTS_$(1))),$$(dir $$(lib))$$(LIBODIR)/$$(notdir $$(lib)))
 DEP_OBJS_$(1) = $$(foreach obj,$$(filter %.o,$$(COMPONENTS_$(1))),$$(dir $$(obj))$$(OBJODIR)/$$(notdir $$(obj)))
 $$(IMAGEODIR)/$(1).out: $$(OBJS) $$(DEP_OBJS_$(1)) $$(DEP_LIBS_$(1)) $$(DEPENDS_$(1))
-	@mkdir -p $$(IMAGEODIR)
-	$$(CC) $$(LDFLAGS) $$(if $$(LINKFLAGS_$(1)),$$(LINKFLAGS_$(1)),$$(LINKFLAGS_DEFAULT) $$(OBJS) $$(DEP_OBJS_$(1)) $$(DEP_LIBS_$(1))) -o $$@ 
+	$(Q) mkdir -p $$(IMAGEODIR)
+	$(QECHO) CC $$@
+	$(Q) $$(CC) $$(LDFLAGS) $$(if $$(LINKFLAGS_$(1)),$$(LINKFLAGS_$(1)),$$(LINKFLAGS_DEFAULT) $$(OBJS) $$(DEP_OBJS_$(1)) $$(DEP_LIBS_$(1))) -o $$@ 
 endef
+
+#$(BINODIR)/%.bin: $(IMAGEODIR)/%.out
+#	$(Q) mkdir -p $(BINODIR)
+#	$(Q) $(ESPTOOL) elf2image $< -o $(FIRMWAREDIR)
+
+$(BINODIR)/%.0.bin: $(IMAGEODIR)/%.0.out
+	@mkdir -p $(BINODIR)
+	$(ESPTOOL2) $(RBOOT_E2_USER_ARGS) $< $(FIRMWAREDIR)/rom0.bin $(RBOOT_E2_SECTS)
 
 $(BINODIR)/%.bin: $(IMAGEODIR)/%.out
 	@mkdir -p $(BINODIR)
@@ -195,70 +222,84 @@ $(BINODIR)/%.bin: $(IMAGEODIR)/%.out
 # Should be done in top-level makefile only
 #
 
-all:	$(SDK_DIR_DEPENDS) pre_build .subdirs $(OBJS) $(OLIBS) $(OIMAGES) $(OBINS) $(SPECIAL_MKTARGETS)
+ifndef PDIR
+# targets for top level only
+RBOOT=bin/rboot.bin
+LIBMAIN_SRC = $(SDK_DIR)/lib/libmain.a
+LIBMAIN_DST = $(TOP_DIR)/sdk-overrides/lib/libmain2.a
+endif
 
-.PHONY: sdk_extracted
+all:	sdk_extracted pre_build $(LIBMAIN_DST) .subdirs $(RBOOT) $(OBJS) $(OLIBS) $(OIMAGES) $(OBINS) $(SPECIAL_MKTARGETS)
+
+.PHONY: sdk_extracted rboot all .subdirs
+
+sdk_extracted: $(TOP_DIR)/sdk/.extracted-$(SDK_VER)
+
+$(LIBMAIN_DST): $(LIBMAIN_SRC)
+	@echo "OC $@"
+	$(Q) $(OBJCOPY) -W Cache_Read_Enable_New $^ $@
+
+
 .PHONY: sdk_patched
 
-sdk_extracted: $(TOP_DIR)/sdk/.extracted-$(SDK_BASE_VER)
 sdk_patched: sdk_extracted $(TOP_DIR)/sdk/.patched-$(SDK_VER)
 
 $(TOP_DIR)/sdk/.extracted-$(SDK_BASE_VER): $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_FILE_VER).zip
-	mkdir -p "$(dir $@)"
-	(cd "$(dir $@)" && rm -fr esp_iot_sdk_v$(SDK_VER) ESP8266_NONOS_SDK && unzip $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_FILE_VER).zip ESP8266_NONOS_SDK/lib/* ESP8266_NONOS_SDK/ld/eagle.rom.addr.v6.ld ESP8266_NONOS_SDK/include/* ESP8266_NONOS_SDK/bin/esp_init_data_default.bin)
-	mv $(dir $@)/ESP8266_NONOS_SDK $(dir $@)/esp_iot_sdk_v$(SDK_VER)
-	rm -f $(SDK_DIR)/lib/liblwip.a
-	touch $@
+	$(Q) mkdir -p "$(dir $@)"
+	$(Q) (cd "$(dir $@)" && rm -fr esp_iot_sdk_v$(SDK_VER) ESP8266_NONOS_SDK && unzip $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_FILE_VER).zip ESP8266_NONOS_SDK/lib/* ESP8266_NONOS_SDK/ld/eagle.rom.addr.v6.ld ESP8266_NONOS_SDK/include/* ESP8266_NONOS_SDK/bin/esp_init_data_default.bin)
+	$(Q) mv $(dir $@)/ESP8266_NONOS_SDK $(dir $@)/esp_iot_sdk_v$(SDK_VER)
+	$(Q) rm -f $(SDK_DIR)/lib/liblwip.a
+	$(Q) touch $@
 
 $(TOP_DIR)/sdk/.patched-$(SDK_VER): $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_PATCH_VER).zip
-	mkdir -p "$(dir $@)/patch"
-	(cd "$(dir $@)/patch" && unzip $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_PATCH_VER)*.zip *.a esp_init_data_default.bin && mv *.a $(SDK_DIR)/lib/ && mv esp_init_data_default.bin $(SDK_DIR)/bin/)
-	rmdir $(dir $@)/patch
-	rm -f $(SDK_DIR)/lib/liblwip.a
-	touch $@
+	$(Q) mkdir -p "$(dir $@)/patch"
+	$(Q) (cd "$(dir $@)/patch" && unzip $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_PATCH_VER)*.zip *.a esp_init_data_default.bin && mv *.a $(SDK_DIR)/lib/ && mv esp_init_data_default.bin $(SDK_DIR)/bin/)
+	$(Q) rmdir $(dir $@)/patch
+	$(Q) rm -f $(SDK_DIR)/lib/liblwip.a
+	$(Q) touch $@
 
 $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_FILE_VER).zip:
-	mkdir -p "$(dir $@)"
-	wget --tries=10 --timeout=15 --waitretry=30 --read-timeout=20 --retry-connrefused http://espressif.com/sites/default/files/sdks/esp8266_nonos_sdk_v$(SDK_FILE_VER).zip -O $@ || { rm -f "$@"; exit 1; }
-	(echo "$(SDK_FILE_SHA1)  $@" | sha1sum -c -) || { rm -f "$@"; exit 1; }
+	$(Q) mkdir -p "$(dir $@)"
+	$(Q) wget --tries=10 --timeout=15 --waitretry=30 --read-timeout=20 --retry-connrefused http://espressif.com/sites/default/files/sdks/esp8266_nonos_sdk_v$(SDK_FILE_VER).zip -O $@ || { rm -f "$@"; exit 1; }
+	$(Q) (echo "$(SDK_FILE_SHA1)  $@" | sha1sum -c -) || { rm -f "$@"; exit 1; }
 
 $(TOP_DIR)/cache/esp_iot_sdk_v$(SDK_PATCH_VER).zip:
-	mkdir -p "$(dir $@)"
-	wget --tries=10 --timeout=15 --waitretry=30 --read-timeout=20 --retry-connrefused http://espressif.com/sites/default/files/sdks/esp8266_nonos_sdk_v$(SDK_PATCH_VER).zip -O $@ || { rm -f "$@"; exit 1; }
-	(echo "$(SDK_PATCH_SHA1)  $@" | sha1sum -c -) || { rm -f "$@"; exit 1; }
+	$(Q) mkdir -p "$(dir $@)"
+	$(Q) wget --tries=10 --timeout=15 --waitretry=30 --read-timeout=20 --retry-connrefused http://espressif.com/sites/default/files/sdks/esp8266_nonos_sdk_v$(SDK_PATCH_VER).zip -O $@ || { rm -f "$@"; exit 1; }
+	$(Q) (echo "$(SDK_PATCH_SHA1)  $@" | sha1sum -c -) || { rm -f "$@"; exit 1; }
 
 clean:
-	$(foreach d, $(SUBDIRS), $(MAKE) -C $(d) clean;)
-	$(RM) -r $(ODIR)/$(TARGET)/$(FLAVOR)
-	$(RM) -r "$(TOP_DIR)/sdk"
+	$(Q) $(foreach d, $(SUBDIRS), $(MAKE) -C $(d) clean;)
+	$(Q) $(RM) -r $(ODIR)/$(TARGET)/$(FLAVOR)
+	$(Q) $(RM) -r "$(TOP_DIR)/sdk"
 
 clobber: $(SPECIAL_CLOBBER)
-	$(foreach d, $(SUBDIRS), $(MAKE) -C $(d) clobber;)
-	$(RM) -r $(ODIR)
+	$(Q) $(foreach d, $(SUBDIRS), $(MAKE) $(MAKEPDIR) -C $(d) clobber;)
+	$(Q) $(RM) -r $(ODIR)
 
 flash:
-	@echo "use one of the following targets to flash the firmware"
-	@echo "  make flash512k - for ESP with 512kB flash size"
-	@echo "  make flash4m   - for ESP with   4MB flash size"
+	$(Q) echo "use one of the following targets to flash the firmware"
+	$(Q) echo "  make flash512k - for ESP with 512kB flash size"
+	$(Q) echo "  make flash4m   - for ESP with   4MB flash size"
 
 flash512k:
-	$(MAKE) -e FLASHOPTIONS="-fm qio -fs  4m -ff 40m" flashinternal
+	$(Q) $(MAKE) -e FLASHOPTIONS="-fm qio -fs  4m -ff 40m" flashinternal
 
 flash4m:
-	$(MAKE) -e FLASHOPTIONS="-fm dio -fs 32m -ff 40m" flashinternal
+	$(Q) $(MAKE) -e FLASHOPTIONS="-fm dio -fs 32m -ff 40m" flashinternal
 
 flashinternal:
 ifndef PDIR
-	$(MAKE) -C ./app flashinternal
+	$(Q) $(MAKE) -C ./app flashinternal
 else
-	$(ESPTOOL) --port $(ESPPORT) write_flash $(FLASHOPTIONS) 0x00000 $(FIRMWAREDIR)0x00000.bin 0x10000 $(FIRMWAREDIR)0x10000.bin
+	$(Q) $(ESPTOOL) --port $(ESPPORT) write_flash $(FLASHOPTIONS) 0x00000 $(FIRMWAREDIR)0x00000.bin 0x10000 $(FIRMWAREDIR)0x10000.bin
 endif
 
 .subdirs:
-	@set -e; $(foreach d, $(SUBDIRS), $(MAKE) -C $(d);)
+	$(Q) set -e; $(foreach d, $(SUBDIRS), $(MAKE) $(MAKEPDIR) -C $(d);)
 
-#.subdirs:
-#	$(foreach d, $(SUBDIRS), $(MAKE) -C $(d))
+bin/rboot.bin: rboot/firmware/rboot.bin
+	$(Q) cp $^ $@
 
 ifneq ($(MAKECMDGOALS),clean)
 ifneq ($(MAKECMDGOALS),clobber)
@@ -271,12 +312,12 @@ endif
 .PHONY: spiffs-image-remove
 
 spiffs-image-remove:
-	$(MAKE) -C tools remove-image spiffsimg/spiffsimg
+	$(Q) $(MAKE) -C tools remove-image spiffsimg/spiffsimg
 
 .PHONY: spiffs-image
 
 spiffs-image: bin/0x10000.bin
-	$(MAKE) -C tools
+	$(Q) $(MAKE) -C tools
 
 .PHONY: pre_build
 
@@ -294,35 +335,39 @@ endif
 
 
 $(OBJODIR)/%.o: %.c
-	@mkdir -p $(OBJODIR);
-	$(CC) $(if $(findstring $<,$(DSRCS)),$(DFLAGS),$(CFLAGS)) $(COPTS_$(*F)) -o $@ -c $<
+	$(Q) mkdir -p $(OBJODIR);
+	$(QECHO) CC $<
+	$(Q) $(CC) $(if $(findstring $<,$(DSRCS)),$(DFLAGS),$(CFLAGS)) $(COPTS_$(*F)) -o $@ -c $<
 
 $(OBJODIR)/%.d: %.c
-	@mkdir -p $(OBJODIR);
-	@echo DEPEND: $(CC) -M $(CFLAGS) $<
-	@set -e; rm -f $@; \
+	$(Q) mkdir -p $(OBJODIR);
+	$(VECHO) DEPEND: $(CC) -M $(CFLAGS) $<
+	$(Q) set -e; rm -f $@; \
 	$(CC) -M $(CFLAGS) $< > $@.$$$$; \
 	sed 's,\($*\.o\)[ :]*,$(OBJODIR)/\1 $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 $(OBJODIR)/%.o: %.s
-	@mkdir -p $(OBJODIR);
-	$(CC) $(CFLAGS) -o $@ -c $<
+	$(Q) mkdir -p $(OBJODIR);
+	$(QECHO) CC $<
+	$(Q) $(CC) $(CFLAGS) -o $@ -c $<
 
 $(OBJODIR)/%.d: %.s
-	@mkdir -p $(OBJODIR); \
-	set -e; rm -f $@; \
+	$(Q) mkdir -p $(OBJODIR); \
+	$(Q) set -e; rm -f $@; \
 	$(CC) -M $(CFLAGS) $< > $@.$$$$; \
 	sed 's,\($*\.o\)[ :]*,$(OBJODIR)/\1 $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
 
 $(OBJODIR)/%.o: %.S
-	@mkdir -p $(OBJODIR);
-	$(CC) $(CFLAGS) -D__ASSEMBLER__ -o $@ -c $<
+	$(Q) mkdir -p $(OBJODIR);
+	$(QECHO) CC $<
+	$(Q) $(CC) $(CFLAGS) -D__ASSEMBLER__ -o $@ -c $<
 
 $(OBJODIR)/%.d: %.S
-	@mkdir -p $(OBJODIR); \
-	set -e; rm -f $@; \
+	$(Q) mkdir -p $(OBJODIR);
+	$(QECHO) CC $<
+	$(Q) set -e; rm -f $@; \
 	$(CC) -M $(CFLAGS) $< > $@.$$$$; \
 	sed 's,\($*\.o\)[ :]*,$(OBJODIR)/\1 $@ : ,g' < $@.$$$$ > $@; \
 	rm -f $@.$$$$
