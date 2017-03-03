@@ -1,0 +1,17 @@
+/*!
+  \defgroup grpCompMsgSendReceive CompMsgSendReceive
+  @{
+    <h2>uartReceiveCb</h2>
+      <ul>
+        <li>uartReceiveCb<br>
+        <li>sendMsg<br>
+      </ul>
+      <br>
+
+    \addtogroup grpuartReceiveCb
+        @{
+        @}
+
+  @}
+*/
+
